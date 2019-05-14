@@ -151,6 +151,7 @@ Modify the spec and status of the `AnsibleJob` CR at
 `pkg/apis/k8s/v1alpha1/ansiblejob_types.go`:
 
 ```go
+// +k8s:openapi-gen=true
 type AnsibleJobSpec struct {
 	Repo      string `json:"repo,required"`
 	Playbook  string `json:"playbook,required"`
@@ -160,6 +161,7 @@ type AnsibleJobSpec struct {
 	Check     bool   `json:"check"`
 }
 
+// +k8s:openapi-gen=true
 type AnsibleJobStatus struct {
 	Status      string `json:"status"`
 	BuildNumber int32  `json:"build_number"`
@@ -247,7 +249,8 @@ $ kubectl create -f deploy/crds/k8s_v1alpha1_ansiblejob_cr.yaml
 ```
 
 :warning: If your operator-sdk is running locally, you will notice it
-reconciled the new state and created a new pod.
+reconciled the new state and created a new pod. STOP the operator-sdk server
+now.
 
 ## Controller Implementation
 
@@ -378,6 +381,7 @@ Finally, let's bind them both to the `PodSpec`:
 +++ pkg/controller/ansiblejob/ansiblejob_controller.go
 
  				Spec: corev1.PodSpec{
+					RestartPolicy:  restartPolicy,
 +					Volumes:        Volumes,
 +					InitContainers: initContainers,
  					Containers:     Containers,
@@ -385,6 +389,16 @@ Finally, let's bind them both to the `PodSpec`:
 ```
 
 ### Controller: Ansible Runner
+
+Add `path` to imports:
+```diff
++++ pkg/controller/ansiblejob/ansiblejob_controller.go
+
+ import (
+        "context"
++       "path"
+ )
+```
 
 ```diff
 +++ pkg/controller/ansiblejob/ansiblejob_controller.go
@@ -444,6 +458,7 @@ And bind to `JobSpec`:
 
 ## Run Operator's First Playbook
 
+First, make sure you are _not_ running the operator-sdk server currently.
 Ensure you have the CRD and CR deployed:
 
 ```bash
@@ -462,6 +477,8 @@ Take notice to current pods & jobs:
 $ kubectl get pod,job
 No resources found.
 ```
+
+:warning: If you have a pod here, delete it with: `kubectl delete pod --all`
 
 Now, run the operator-sdk development local server:
 
