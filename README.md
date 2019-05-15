@@ -174,7 +174,7 @@ After modifying the `*_types.go` file always run the following command to
 update the generated code for that resource type:
 
 ```bash
-$ operator-sdk generate k8s
+$ operator-sdk generate openapi
 $ git status
 $ git commit -am 'Add spec'
 ```
