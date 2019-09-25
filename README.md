@@ -121,6 +121,7 @@ Use the CLI to create a new ansible-operator project:
 ```bash
 $ mkdir -p $GOPATH/src/github.com/rafi/
 $ cd $GOPATH/src/github.com/rafi/
+$ export GO111MODULE=on 
 $ operator-sdk new ansible-operator
 $ cd ansible-operator
 ```
