@@ -1,7 +1,5 @@
 # Extend Kubernetes with Go & Operators
 
-> Tikal Fullstack Radar Day 2019
-
 ## Introduction
 
 Kubernetes is proving great abilities in orchestrating container clusters over
@@ -32,13 +30,16 @@ created.
 * Experience with Minikube/Kubernetes
 * Basic Golang knowledge
 
-Please ensure you have Minikube and Go installed on your laptop.
+1. git
+1. go version v1.12+
+1. mercurial version 3.9+
+1. docker version 17.03+
+1. kubectl version v1.11.3+
+1. Access to a Kubernetes v1.11.3+ cluster
+
+Ensure you have Minikube and Go installed on your laptop.
 
 ### Setup
-
-* Install [Virtualbox] from official docs
-* Install [kubectl] from official docs
-* Install [Minikube] from official docs
 
 I've tried to summarize installation here:
 
@@ -47,10 +48,7 @@ I've tried to summarize installation here:
 For macOS make sure to install and upgrade packages:
 
 ```bash
-brew install go dep kubernetes-cli
-brew upgrade go dep kubernetes-cli
-brew cask install minikube
-brew cask reinstall minikube
+brew install go kubernetes-cli minikube
 minikube start
 minikube stop
 ```
@@ -65,10 +63,9 @@ sudo apt-get update
 sudo apt-get install golang-go
 ```
 
-Then install Minikube and kubectl:
+Then install Minikube:
 
 ```bash
-sudo snap install kubectl --classic
 curl -Lo minikube https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
 chmod +x minikube
 sudo cp minikube /usr/local/bin && rm minikube
@@ -77,14 +74,12 @@ sudo cp minikube /usr/local/bin && rm minikube
 ### Windows Setup
 
 For Windows, first install latest Golang from [here](https://golang.org/dl/).
-Then install Minikube and kubectl:
+Then install Minikube:
 
 ```bash
-choco install minikube kubernetes-cli
+choco install minikube
 ```
 
-[Virtualbox]: https://www.virtualbox.org/wiki/Downloads
-[kubectl]: https://kubernetes.io/docs/tasks/tools/install-kubectl/
 [Minikube]: https://kubernetes.io/docs/tasks/tools/install-minikube/
 
 ## Getting Started: Operator-SDK
@@ -92,22 +87,7 @@ choco install minikube kubernetes-cli
 The [Operator SDK] has a CLI tool that helps the developer to create, build,
 and deploy a new operator project.
 
-Checkout the desired release tag and install the SDK CLI tool:
-
-```bash
-$ mkdir -p $GOPATH/src/github.com/operator-framework
-$ cd $GOPATH/src/github.com/operator-framework
-$ git clone https://github.com/operator-framework/operator-sdk
-$ cd operator-sdk
-$ git checkout master
-$ make dep
-$ make install
-```
-
-This installs the CLI binary `operator-sdk` at `$GOPATH/bin`.
-
-Alternatively, if you are using Homebrew, you can install the SDK CLI tool with
-the following command:
+Install the SDK CLI tool:
 
 ```bash
 $ brew install operator-sdk
@@ -116,13 +96,12 @@ $ brew install operator-sdk
 ### (1) Operator-SDK: Initialize new project
 
 Use the CLI to create a new ansible-operator project:
-(🚨 Change ‘`rafi`’ to your GitHub username)
+(🚨 Change ‘`--repo`’ to your Git repository)
 
 ```bash
-$ mkdir -p $GOPATH/src/github.com/rafi/
-$ cd $GOPATH/src/github.com/rafi/
-$ export GO111MODULE=on 
-$ operator-sdk new ansible-operator
+$ mkdir $HOME/projects
+$ cd $HOME/projects
+$ operator-sdk new ansible-operator --repo=github.com/tikalk/ansible-operator
 $ cd ansible-operator
 ```
 
@@ -141,6 +120,7 @@ This will scaffold the `AnsibleJob` resource API under
 `pkg/apis/cache/v1alpha1/...`.
 
 ```bash
+$ git init
 $ git status
 $ git add .
 $ git commit -m 'Introduce new CRD'
@@ -152,7 +132,6 @@ Modify the spec and status of the `AnsibleJob` CR at
 `pkg/apis/k8s/v1alpha1/ansiblejob_types.go`:
 
 ```go
-// +k8s:openapi-gen=true
 type AnsibleJobSpec struct {
 	Repo      string `json:"repo,required"`
 	Playbook  string `json:"playbook,required"`
@@ -162,7 +141,6 @@ type AnsibleJobSpec struct {
 	Check     bool   `json:"check"`
 }
 
-// +k8s:openapi-gen=true
 type AnsibleJobStatus struct {
 	Status      string `json:"status"`
 	BuildNumber int32  `json:"build_number"`
@@ -175,7 +153,8 @@ After modifying the `*_types.go` file always run the following command to
 update the generated code for that resource type:
 
 ```bash
-$ operator-sdk generate openapi
+$ operator-sdk generate k8s
+$ operator-sdk generate crds
 $ git status
 $ git commit -am 'Add spec'
 ```
@@ -204,7 +183,7 @@ Before running the operator, the CRD must be registered with the Kubernetes
 apiserver:
 
 ```bash
-$ kubectl create -f deploy/crds/k8s_v1alpha1_ansiblejob_crd.yaml
+$ kubectl create -f deploy/crds/k8s.tikalk.com_ansiblejobs_crd.yaml
 ```
 
 Once this is done, there are two ways to run the operator:
@@ -218,35 +197,37 @@ Run locally outside the cluster:
 
 ```bash
 $ export OPERATOR_NAME=ansible-operator
-$ operator-sdk up local --namespace=default
+$ operator-sdk run local --watch-namespace=default
 
-2019/04/30 23:10:11 Go Version: go1.12.5
-2019/04/30 23:10:11 Go OS/Arch: darwin/amd64
-2019/04/30 23:10:11 operator-sdk Version: 0.7.0+git
-2019/04/30 23:10:12 Registering Components.
-2019/04/30 23:10:12 Starting the Cmd.
+INFO[0000] Running the operator locally; watching namespace "default"
+{ "msg": "Operator Version: 0.0.1" }
+{ "msg": "Go Version: go1.14.4" }
+{ "msg": "Go OS/Arch: darwin/amd64" }
+{ "msg": "Version of operator-sdk: v0.18.2" }
 ```
 
 ### Create New Custom Resource (CR)
 
-Modify `deploy/crds/k8s_v1alpha1_ansiblejob_cr.yaml`
+Modify `deploy/crds/k8s.tikalk.com_v1alpha1_ansiblejob_cr.yaml`
 
 ```yaml
 apiVersion: k8s.tikalk.com/v1alpha1
 kind: AnsibleJob
 metadata:
   name: playbook-debug
-  spec:
-    repo: https://github.com/tikalk/ansible-operator-test.git
-    playbook: playbooks/debug.yml
-    inventory: ./inventory
-    limit: local
+spec:
+  repo: https://github.com/tikalk/ansible-operator-test.git
+  playbook: playbooks/debug.yml
+  inventory: ./inventory
+  limit: local
+  check: false
+  forks: 1
 ```
 
 Now let’s deploy it!
 
 ```bash
-$ kubectl create -f deploy/crds/k8s_v1alpha1_ansiblejob_cr.yaml
+$ kubectl create -f deploy/crds/k8s.tikalk.com_v1alpha1_ansiblejob_cr.yaml
 ```
 
 :warning: If your operator-sdk is running locally, you will notice it
@@ -312,6 +293,9 @@ Now replace the whole function `newJobForCR` with:
 ```go
 // newJobForCR returns a pod with the same name/namespace as the cr
 func newJobForCR(cr *k8sv1alpha1.AnsibleJob) *batchv1.Job {
+	labels := map[string]string{
+		"app": cr.Name,
+	}
 	var restartPolicy = corev1.RestartPolicyNever
 	var Containers []corev1.Container
 
@@ -319,7 +303,7 @@ func newJobForCR(cr *k8sv1alpha1.AnsibleJob) *batchv1.Job {
 
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name,
+			Name:      cr.Name + "-job",
 			Namespace: cr.Namespace,
 		},
 		Spec: batchv1.JobSpec{
@@ -346,7 +330,7 @@ Modify our function `newJobForCR` and add:
 	initContainers := []corev1.Container{
 		corev1.Container{
 			Name:  "git-sync",
-			Image: "k8s.gcr.io/git-sync:v3.1.1",
+			Image: "k8s.gcr.io/git-sync:v3.1.6",
 			VolumeMounts: []corev1.VolumeMount{
 				corev1.VolumeMount{
 					Name:      "project",
@@ -407,7 +391,7 @@ Add `path` to imports:
 -	Containers = append(Containers, corev1.Container{})
 +	Containers = append(Containers, corev1.Container{
 +		Name:       "ansible",
-+		Image:      "ansible/ansible-runner:1.2.0",
++		Image:      "ansible/ansible-runner:1.4.6",
 +		WorkingDir: path.Join("/srv", "project"),
 +		Args: []string{
 +			"ansible-playbook",
@@ -485,13 +469,13 @@ Now, run the operator-sdk development local server:
 
 ```bash
 $ export OPERATOR_NAME=ansible-operator
-$ operator-sdk up local --namespace=default
+$ operator-sdk run local --watch-namespace=default
 
-2019/05/01 23:10:11 Go Version: go1.12.5
-2019/05/01 23:10:11 Go OS/Arch: darwin/amd64
-2019/05/01 23:10:11 operator-sdk Version: 0.7.0+git
-2019/05/01 23:10:12 Registering Components.
-2019/05/01 23:10:12 Starting the Cmd.
+INFO[0000] Running the operator locally; watching namespace "default"
+{ "msg": "Operator Version: 0.0.1" }
+{ "msg": "Go Version: go1.14.4" }
+{ "msg": "Go OS/Arch: darwin/amd64" }
+{ "msg": "Version of operator-sdk: v0.18.2" }
 ```
 
 You should see these logs:
@@ -507,17 +491,17 @@ Check the status of Jobs and Pods:
 
 ```bash
 $ kubectl get pod,job
-NAME                           READY   STATUS      RESTARTS   AGE
-pod/playbook-debug-job-rj86z   0/1     Completed   0          3m5s
+NAME                               READY   STATUS      RESTARTS   AGE
+pod/example-ansiblejob-job-rj86z   0/1     Completed   0          3m5s
 
-NAME                           COMPLETIONS   DURATION   AGE
-job.batch/playbook-debug-job   1/1           8s         3m5s
+NAME                               COMPLETIONS   DURATION   AGE
+job.batch/example-ansiblejob-job   1/1           8s         3m5s
 ```
 
 Finally, let's see the actual Ansible playbook logs:
 
 ```bash
-$ kubectl logs job/playbook-debug-job
+$ kubectl logs job/example-ansiblejob-job
 
 PLAY [all] *********************************************************************
 
@@ -562,5 +546,5 @@ localhost                  : ok=3    changed=0    unreachable=0    failed=0
 
 Great success! :fireworks:
 
-[Operator SDK]: https://github.com/operator-framework/operator-sdk#prerequisites
-[project layout]: https://github.com/operator-framework/operator-sdk/blob/master/doc/project_layout.md
+[Operator SDK]: https://sdk.operatorframework.io/docs/golang/installation/
+[project layout]: https://sdk.operatorframework.io/docs/golang/references/project-layout/
